@@ -1,5 +1,7 @@
-import { handler } from "next/dist/build/templates/app-page";
-import { mutation } from "./_generated/server";
+// import { handler } from "next/dist/build/templates/app-page";
+// ... rest of your code
+
+import { mutation, query } from "./_generated/server";
 
 export const store = mutation({
   args: {},
@@ -25,6 +27,11 @@ export const store = mutation({
     return await ctx.db.insert("users", {
       name: identity.name ?? "Anonymous",
       tokenIdentifier: identity.tokenIdentifier,
+      email: identity.email,
+      imageUrl: identity.pictureUrl,
+      username: identity.username,
+      createdAt: Date.now(),
+      lastActiveAt: Date.now(),
     });
   },
 });
