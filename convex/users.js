@@ -1,6 +1,8 @@
 // import { handler } from "next/dist/build/templates/app-page";
 // ... rest of your code
 
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 
 export const store = mutation({
@@ -54,3 +56,36 @@ export const getCurrentUser = query({
     return user;
   }
 })
+
+
+export const updateUsername = mutation({
+  args: {
+    username: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(internal.users.getCurrentUser);
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!usernameRegex.test(args.username)) {
+      throw new Error(
+        "Username can only contains letters, numbers, underscores, hyphens"
+      );
+    }
+    if (args.username.length < 3 || args.username.length > 20) {
+      throw new Error("Username must be between 3 and 20");
+    }
+    if (args.username !== user.username) {
+      const existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) => q.eq("username", args.username))
+        .unique();
+      if (existingUser) {
+        throw new Error("Username is already taken");
+      }
+    }
+    await ctx.db.patch(user._id, {
+      username: args.username,
+      lastActiveAt: Date.now(),
+    });
+    return user._id;
+  },
+});
