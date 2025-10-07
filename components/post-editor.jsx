@@ -10,6 +10,7 @@ import PostEditorHeader from './post-editor-header';
 import PostEditorContent from './post-editor-content';
 import PostEditorSettings from './post-editor-settings';
 import { toast } from 'sonner';
+import ImageUploadModal from './image-upload-modal';
 
 const postSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title too long"),
@@ -63,6 +64,49 @@ const PostEditor = ({ initialData = null, mode = "create" }) => {
 
      return () => clearInterval(autoSave);
    }, [watchedValues.title, watchedValues.content]);
+  const onSubmit = async (data, action, silent = false) => {
+    try {
+      const postData = {
+        title: data.title,
+        content: data.content,
+        category: data.category || undefined,
+        tags: data.tags,
+        featuredImage: data.featuredImage || undefined,
+        status: action === "publish" ? "published" : "draft",
+        scheduledFor: data.scheduledFor
+          ? new Date(data.scheduledFor).getTime()
+          : undefined,
+      };
+      let resultId;
+       if (mode === "edit" && initialData?._id) {
+         // Always use update for edit mode
+         resultId = await updatePost({
+           id: initialData._id,
+           ...postData,
+         });
+       } else if (initialData?._id && action === "draft") {
+         // If we have existing draft data, update it
+         resultId = await updatePost({
+           id: initialData._id,
+           ...postData,
+         });
+       } else {
+         // Create new post (will auto-update existing draft if needed)
+         resultId = await createPost(postData);
+      }
+        if (!silent) {
+          const message =
+            action === "publish" ? "Post published!" : "Draft saved!";
+          toast.success(message);
+          if (action === "publish") router.push("/dashboard/posts");
+        }
+
+        return resultId;
+    } catch (error) {
+      if (!silent) toast.error(error.message || "Failed to save post");
+      throw error;
+    }
+  }
   const handleSave = (silent=false) => { 
     handleSubmit((data) => onSubmit(data, "draft", silent))();
   }
@@ -78,6 +122,7 @@ const PostEditor = ({ initialData = null, mode = "create" }) => {
     }
     handleSubmit((data) => onSubmit(data, "schedule"))();
   };
+  const handleImageSelect=(imageData)=>{}
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <PostEditorHeader
@@ -103,6 +148,16 @@ const PostEditor = ({ initialData = null, mode = "create" }) => {
         onClose={() => setIsSettingsOpen(false)}
         form={form}
         mode={mode}
+      />
+      <ImageUploadModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        onImageSelect={handleImageSelect}
+        title={
+          imageModalType === "featured"
+            ? "Upload Featured Image"
+            : "Insert Image"
+        }
       />
     </div>
   );
