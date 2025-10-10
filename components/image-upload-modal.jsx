@@ -6,9 +6,12 @@ import z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useDropzone } from 'react-dropzone';
-import { Loader2, Upload } from 'lucide-react';
+import { Check, ImageIcon, Loader2, Upload, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadToImageKit } from '@/lib/imagekit';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import Image from 'next/image';
 const transformationSchema = z.object({
   aspectRatio: z.string().default("original"),
   customWidth: z.number().min(100).max(2000).default(800),
@@ -80,9 +83,15 @@ const ImageUploadModal = ({
   })
 
   const watchedValues = watch();
+   const resetForm = () => {
+     setUploadedImage(null);
+     setTransformedImage(null);
+     setActiveTab("upload");
+     reset();
+   };
   const handleClose = () => {
     onClose();
-    // resetForm();
+    resetForm();
   }
   const onDrop = async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -125,6 +134,90 @@ const ImageUploadModal = ({
     },
     multiple:false,
   });
+  const handleSelectImage = () => {
+    if (transformedImage) {
+      onImageSelect({
+        url: transformedImage,
+        originalUrl: uploadedImage?.url,
+        fileId: uploadedImage?.fileId,
+        name: uploadedImage?.name,
+        width: uploadedImage?.width,
+        height: uploadedImage?.height,
+      });
+      onClose();
+      resetForm();
+    }
+  };
+  //Apply Transformations
+  const applyTransformations = async () => {
+    if (!uploadedImage) return;
+    setIsTransforming(true);
+    try {
+      let transformationChain = [];
+
+      //Aspect ratio and resizing
+      if (watchedValues.aspectRatio !== "original") {
+        const ratio = ASPECT_RATIOS.find(
+          (r) => r.value === watchedValues.aspectRatio
+        );
+        if (ratio && ratio.width && ratio.height) {
+          transformationChain.push({
+            width: ratio.width,
+            height: ratio.height,
+            focus: watchedValues.smartCropFocus,
+          });
+        } else if (watchedValues.aspectRatio === "custom") {
+          transformationChain.push({
+            width: watchedValues.customWidth,
+            height: watchedValues.customHeight,
+            focus: watchedValues.smartCropFocus,
+          });
+        }
+      }
+
+      //BAckground removal
+      if (watchedValues.backgroundRemoved) {
+        transformationChain.push({ effect: "removedotbg" });
+      }
+
+      // Drop shadow (only works with transparent background)
+      if (watchedValues.dropShadow && watchedValues.backgroundRemoved) {
+        transformationChain.push({ effect: "dropshadow" });
+      }
+
+      if (watchedValues.textOverlay?.trim()) {
+        transformationChain.push({
+          overlayText: watchedValues.textOverlay,
+          overlayTextFontSize: watchedValues.textFontSize,
+          overlayTextColor: watchedValues.textColor.replace("#", ""),
+          gravity: watchedValues.textPosition,
+          overlayTextPadding: 10,
+        });
+      }
+
+      // Apply transformations
+      const transformedUrl = buildTransformationUrl(
+        uploadedImage.url,
+        transformationChain
+      );
+
+      // Add a small delay to show loading state and allow ImageKit to process
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      setTransformedImage(transformedUrl);
+      toast.success("Transformations applied!");
+    } catch (error) {
+      console.error("Transformation error:", error);
+      toast.error("Failed to apply transformations");
+    } finally {
+        setIsTransforming(false);
+    }
+  }
+
+    //reset Transformations
+  const resetTransformations = async () => {
+    
+  }
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="!max-w-6xl !h-[90vh] overflow-y-auto">
@@ -135,7 +228,7 @@ const ImageUploadModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="account" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload">Upload</TabsTrigger>
             <TabsTrigger value="transform" disbaled={!uploadedImage}>
@@ -173,9 +266,116 @@ const ImageUploadModal = ({
                 </div>
               )}
             </div>
+            {uploadedImage && (
+              <div className="text-center space-y-4">
+                <Badge
+                  variant="secondary"
+                  className="bg-green-500/20 text-green-300 border-green-500/30"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Image uploaded successfully!
+                </Badge>
+                <div className="text-sm text-slate-400">
+                  {uploadedImage?.width}x{uploadedImage?.height} .{" "}
+                  {Math.round(uploadedImage?.size / 1024)}KB
+                </div>
+                <Button
+                  onClick={() => setActiveTab("transform")}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue700"
+                >
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Start transforming
+                </Button>
+              </div>
+            )}
           </TabsContent>
           <TabsContent value="transform" className="space-y-4">
-            transform
+            <div className="grid lg:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-6">
+                <div className='space-y-4'>
+                  <h3 className='text-lg font-semibold text-white flex items-center'>
+                  <Wand2 className='h-5 w-5 mr-2'/>
+                    AI Transformations
+                  </h3>
+                  {/* Background Removal */}
+
+                  {/* Drop Shadow */}
+
+                  {/* Aspect Ratio & Cropping */}
+
+                  {/* Text Overlay */}
+
+                  {/* Action Buttons */}
+                  <div className='flex gap-3'>
+                    <Button onClick={applyTransformations} disbaled={isTransforming} variant={'primary'}>
+                      {isTransforming ? (
+                       <Loader2 className='h-4 w-4 mr-2 animate-spin'/> 
+                      ) : (
+                          <Wand2 className='h-4 w-4 mr-2'/>
+                    )}
+                    </Button>
+
+                  </div>
+
+                </div>
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                  <ImageIcon className="h-5 w-5 mr-2" />
+                  Preview
+                </h3>
+                {transformedImage && (
+                  <div className="relative">
+                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                      <img
+                        src={transformedImage}
+                        alt="Transformed preview"
+                        className="w-full h-auto max-h-96 object-contain rounded-lg mx-auto"
+                        onError={() => {
+                          toast.error("Failed to load transformed image");
+                          setTransformedImage(uploadedImage?.url);
+                        }}
+                      />
+                    </div>
+                    {isTransforming && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                        <div className="bg-slate-800 rounded-lg p-4 flex items-center space-x-3">
+                          <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                          <span className="text-white">
+                            Applying transformations...
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {uploadedImage && transformedImage && (
+                      <div className="text-center space-y-4">
+                        <div className="text-sm text-slate-400">
+                          Current image URL ready for use
+                        </div>
+
+                        <div className="flex gap-3 justify-center">
+                          <Button
+                            onClick={handleSelectImage}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Use This Image
+                          </Button>
+
+                          <Button
+                            onClick={handleClose}
+                            variant="outline"
+                            className="border-slate-600 hover:bg-slate-700"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
