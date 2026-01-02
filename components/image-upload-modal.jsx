@@ -297,7 +297,6 @@ const ImageUploadModal = ({
                   <Wand2 className='h-5 w-5 mr-2'/>
                     AI Transformations
                   </h3>
-                  {/* Background Removal */}
 
                   {/* Drop Shadow */}
 
